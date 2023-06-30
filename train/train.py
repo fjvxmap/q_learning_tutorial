@@ -26,7 +26,15 @@ def initialize_q_table():
         # allocate list with number of remaining card slots
         number_of_one = bin(state // 4).count('1')
         if number_of_one % 2 == 0 and number_of_one > 2:
-            q_table[state] = [0] * bin((state // 4) % (2 ** CARD_NUM)).count('1')
+            first_bin = bin((state // 4) // (2 ** CARD_NUM))
+            second_bin = bin((state // 4) % (2 ** CARD_NUM))
+            first_pos = [2 - first_bin.find('1'), CARD_NUM - first_bin[::-1].find('1') - 1]
+            second_pos = [2 - second_bin.find('1'), CARD_NUM - second_bin[::-1].find('1') - 1]
+            if -1 in first_pos + second_pos or first_bin.count('1') != second_bin.count('1'):
+                continue
+            if first_pos[0] >= second_pos[1] or first_pos[1] <= second_pos[0]:
+                continue
+            q_table[state] = [0] * second_bin.count('1')
 
 def read_q_table(path):
     '''
@@ -118,15 +126,18 @@ def get_max_q(numbers, oppo_numbers, is_first=True):
     Returns:
         max_q_val (float): The maximum Q-value
     '''
-    if len(numbers) == 1:
+    try:
+        if len(numbers) == 1:
+            max_q_val = 0
+        elif is_first:
+            max_q_val = max(q_table[cal_state(numbers, oppo_numbers)])
+        else:
+            max_q_val = max(
+                q_table[cal_state(numbers, oppo_numbers, is_first, True)] +
+                q_table[cal_state(numbers, oppo_numbers, is_first, False)]
+            )
+    except KeyError:
         max_q_val = 0
-    elif is_first:
-        max_q_val = max(q_table[cal_state(numbers, oppo_numbers)])
-    else:
-        max_q_val = max(
-            q_table[cal_state(numbers, oppo_numbers, is_first, True)] +
-            q_table[cal_state(numbers, oppo_numbers, is_first, False)]
-        )
     return max_q_val
 
 def q_choose_number(numbers, oppo_numbers, is_first=True, odd_flag=False, epsilon=0, soft_bound=0):
@@ -182,6 +193,7 @@ def q_learning(epochs, l_rate=0.1, d_factor=0.9, epsilon=0.1):
         first = int(np.random.randint(PLAYER_NUM))
         second = 1 - first
         states = [[] for _ in range(PLAYER_NUM)]
+        game_over = False
 
         for _ in range(CARD_NUM - 1):
             prev_first_numbers = numbers[first][:]
@@ -225,6 +237,13 @@ def q_learning(epochs, l_rate=0.1, d_factor=0.9, epsilon=0.1):
                 rewards[second] + d_factor * second_next_max_q - second_q
             )
 
+            for i in range(PLAYER_NUM):
+                if min(numbers[i]) >= max(numbers[1 - i]):
+                    scores[i] += len(numbers[i]) - int(min(numbers[i]) == max(numbers[1 - i]))
+                    game_over = True
+                    break
+            if game_over:
+                break
             first, second = second, first
 
         scores[FIRST] += int(numbers[FIRST] > numbers[SECOND])
