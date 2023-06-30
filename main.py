@@ -1,10 +1,14 @@
 '''Play game with trained computer'''
-import train.train as trained
+import argparse
+import numpy as np
+
+from train.train import CARD_NUM, PLAYER_NUM, q_choose_number, read_q_table
+from simul.simul import simulate
 
 PLAYER, COMPUTER = 0, 1
 NAMES = ['Player', 'Computer']
 
-def choose_number(numbers, oppo_numbers, is_player=False, is_first = True, odd_flag = False):
+def choose_number(numbers, oppo_numbers, is_player=False, is_first=True, odd_flag=False):
     '''
     Choose a number from number list or Q-table.
     Args:
@@ -29,12 +33,12 @@ def choose_number(numbers, oppo_numbers, is_player=False, is_first = True, odd_f
                 print("Invalid choice. Please choose a number from the available numbers.")
         numbers.remove(chosen_number)
     else:
-        _, _, chosen_number, numbers, _ = trained.q_choose_number(
+        _, _, chosen_number, numbers, _ = q_choose_number(
             numbers,
             oppo_numbers,
             is_first,
             odd_flag,
-            soft_bound=trained.CARD_NUM / 2
+            soft_bound=CARD_NUM / 2
         )
     return chosen_number, numbers
 
@@ -46,13 +50,14 @@ def play_game():
     Returns:
         None
     '''
-    scores = [0] * trained.PLAYER_NUM
-    numbers = [list(range(1, trained.CARD_NUM + 1)), list(range(1, trained.CARD_NUM + 1))]
-    first = int(trained.np.random.randint(trained.PLAYER_NUM))
+    scores = [0] * PLAYER_NUM
+    numbers = [list(range(1, CARD_NUM + 1)), list(range(1, CARD_NUM + 1))]
+    first = int(np.random.randint(PLAYER_NUM))
     second = 1 - first
+    odd_msg = ['even', 'odd']
     game_over = False
 
-    for round_num in range(1, trained.CARD_NUM + 1):
+    for round_num in range(1, CARD_NUM + 1):
         print(f'[Round {round_num}]')
         print("Computer's available numbers:\t", numbers[COMPUTER])
         print("Player's available numbers:\t", numbers[PLAYER])
@@ -62,18 +67,14 @@ def play_game():
             numbers[second],
             first == PLAYER
         )
-        if first_number % 2 == 0:
-            odd_flag = 0
-            print(f'{NAMES[first]} has chosen an even number.')
-        else:
-            odd_flag = 1
-            print(f'{NAMES[first]} has chosen an odd number.')
+        odd_flag = int(first_number % 2 != 0)
+        print(f'{NAMES[first]} has chosen an {odd_msg[odd_flag]} number.')
         second_number, numbers[second] = choose_number(
             numbers[second],
             prev_numbers,
             second == PLAYER,
             is_first=False,
-            odd_flag=odd_flag
+            odd_flag=bool(odd_flag)
         )
         print(f'Computer has chosen the number {first_number if first == COMPUTER else second_number}.')
 
@@ -87,15 +88,14 @@ def play_game():
             print("It's a tie!")
         print()
 
-        for i in range(trained.PLAYER_NUM):
-            if min(numbers[i]) > max(numbers[1 - i]):
-                scores[i] += trained.CARD_NUM - round_num
+        for i in range(PLAYER_NUM):
+            if min(numbers[i]) >= max(numbers[1 - i]):
+                scores[i] += CARD_NUM - round_num - int(min(numbers[i]) == max(numbers[1 - i]))
                 game_over = True
                 break
         if game_over:
             break
-        else:
-            first, second = second, first
+        first, second = second, first
 
     print("Game over!")
     print("Player's score:", scores[PLAYER])
@@ -109,9 +109,14 @@ def play_game():
         print("The final result is a tie!")
 
 
-parser = trained.argparse.ArgumentParser(description='Play game with trained computer')
+parser = argparse.ArgumentParser(description='Play game with trained computer')
 parser.add_argument('--input', type=str, default='q_table.txt', help='Q-table input file path')
+parser.add_argument('-n', '--number', type=int, default=0, help='Number of simulation')
+parser.add_argument('-s', '--sim', action='store_true', help='Run a simulation')
 args = parser.parse_args()
 
-trained.read_q_table(args.input)
-play_game()
+read_q_table(args.input)
+if args.sim:
+    simulate(args.number)
+else:
+    play_game()
