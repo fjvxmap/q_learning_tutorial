@@ -38,6 +38,31 @@ def choose_number(numbers, oppo_numbers, is_player=False, is_first = True, odd_f
         )
     return chosen_number, numbers
 
+def is_game_over(numbers, remaining_round):
+    '''
+    Check whether the game is over or not.
+    Args:
+        numbers (list): Card number lists of player and computer
+        remaining_round (int): Number of remaining rounds
+    Returns:
+        Tuple containing the following elements:
+        game_ended (bool): Indicates whether the game is over or not
+        winner (int): Id of winner (if the game is not over, None)
+    '''
+    player_win, computer_win = 0, 0
+    for i in range(remaining_round):
+        if len([n for n in numbers[COMPUTER] if numbers[PLAYER][i] > n]) == remaining_round:
+            player_win += 1
+        if len([n for n in numbers[PLAYER] if numbers[COMPUTER][i] > n]) == remaining_round:
+            computer_win += 1
+    if player_win == remaining_round:
+        game_ended, winner = True, PLAYER
+    elif computer_win == remaining_round:
+        game_ended, winner = True, COMPUTER
+    else:
+        game_ended, winner = False, None
+    return game_ended, winner
+
 def play_game():
     '''
     Play game with computer
@@ -84,9 +109,14 @@ def play_game():
             scores[second] += 1
         else:
             print("It's a tie!")
+        print()
+
+        game_ended, winner = is_game_over(numbers, trained.CARD_NUM - round_num)
+        if game_ended:
+            scores[winner] += trained.CARD_NUM - round_num
+            break
 
         first, second = second, first
-        print()
 
     print("Game over!")
     print("Player's score:", scores[PLAYER])
