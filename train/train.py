@@ -25,10 +25,8 @@ def initialize_q_table():
 
         # allocate list with number of remaining card slots
         number_of_one = bin(state // 4).count('1')
-        if number_of_one % 2 == 0:
-            q_table[state] = [0] * (bin((state // 4) % (2 ** CARD_NUM)).count('1'))
-            if len(q_table[state]) == 0:
-                q_table[state] = [0]
+        if number_of_one % 2 == 0 and number_of_one > 2:
+            q_table[state] = [0] * bin((state // 4) % (2 ** CARD_NUM)).count('1')
 
 def read_q_table(path):
     '''
@@ -120,7 +118,9 @@ def get_max_q(numbers, oppo_numbers, is_first=True):
     Returns:
         max_q_val (float): The maximum Q-value
     '''
-    if is_first:
+    if len(numbers) == 1:
+        max_q_val = 0
+    elif is_first:
         max_q_val = max(q_table[cal_state(numbers, oppo_numbers)])
     else:
         max_q_val = max(
@@ -183,7 +183,7 @@ def q_learning(epochs, l_rate=0.1, d_factor=0.9, epsilon=0.1):
         second = 1 - first
         states = [[] for _ in range(PLAYER_NUM)]
 
-        for _ in range(CARD_NUM):
+        for _ in range(CARD_NUM - 1):
             prev_first_numbers = numbers[first][:]
             first_action, first_state, first_number, numbers[first], first_q = q_choose_number(
                 numbers[first],
@@ -227,6 +227,8 @@ def q_learning(epochs, l_rate=0.1, d_factor=0.9, epsilon=0.1):
 
             first, second = second, first
 
+        scores[FIRST] += int(numbers[FIRST] > numbers[SECOND])
+        scores[SECOND] += int(numbers[FIRST] < numbers[SECOND])
         if scores[FIRST] != scores[SECOND]:
             winner = FIRST if scores[FIRST] > scores[SECOND] else SECOND
             for coordinate in states[winner]:
