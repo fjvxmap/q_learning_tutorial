@@ -38,31 +38,6 @@ def choose_number(numbers, oppo_numbers, is_player=False, is_first = True, odd_f
         )
     return chosen_number, numbers
 
-def is_game_over(numbers, remaining_round):
-    '''
-    Check whether the game is over or not.
-    Args:
-        numbers (list): Card number lists of player and computer
-        remaining_round (int): Number of remaining rounds
-    Returns:
-        Tuple containing the following elements:
-        game_ended (bool): Indicates whether the game is over or not
-        winner (int): Id of winner (if the game is not over, None)
-    '''
-    player_win, computer_win = 0, 0
-    for i in range(remaining_round):
-        if len([n for n in numbers[COMPUTER] if numbers[PLAYER][i] > n]) == remaining_round:
-            player_win += 1
-        if len([n for n in numbers[PLAYER] if numbers[COMPUTER][i] > n]) == remaining_round:
-            computer_win += 1
-    if player_win == remaining_round:
-        game_ended, winner = True, PLAYER
-    elif computer_win == remaining_round:
-        game_ended, winner = True, COMPUTER
-    else:
-        game_ended, winner = False, None
-    return game_ended, winner
-
 def play_game():
     '''
     Play game with computer
@@ -75,6 +50,7 @@ def play_game():
     numbers = [list(range(1, trained.CARD_NUM + 1)), list(range(1, trained.CARD_NUM + 1))]
     first = int(trained.np.random.randint(trained.PLAYER_NUM))
     second = 1 - first
+    game_over = False
 
     for round_num in range(1, trained.CARD_NUM + 1):
         print(f'[Round {round_num}]')
@@ -111,12 +87,15 @@ def play_game():
             print("It's a tie!")
         print()
 
-        game_ended, winner = is_game_over(numbers, trained.CARD_NUM - round_num)
-        if game_ended:
-            scores[winner] += trained.CARD_NUM - round_num
+        for i in range(trained.PLAYER_NUM):
+            if min(numbers[i]) > max(numbers[1 - i]):
+                scores[i] += trained.CARD_NUM - round_num
+                game_over = True
+                break
+        if game_over:
             break
-
-        first, second = second, first
+        else:
+            first, second = second, first
 
     print("Game over!")
     print("Player's score:", scores[PLAYER])
