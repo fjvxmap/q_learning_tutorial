@@ -18,11 +18,10 @@ def choose_number(numbers, oppo_numbers, is_trained, is_first=True, odd_flag=Fal
         odd_flag (bool): Indicates whether number of opponent is odd or not
     Returns:
         Tuple containing the following elements:
-        chosen_number (int): chosen number
-        numbers (list): number list after choosing
+        action (int): index of chosen action
     '''
     epsilon = 0 if is_trained else 1
-    _, _, chosen_number, numbers, _ = q_choose_number(
+    action, _, _ = q_choose_number(
         numbers,
         oppo_numbers,
         is_first,
@@ -30,7 +29,7 @@ def choose_number(numbers, oppo_numbers, is_trained, is_first=True, odd_flag=Fal
         epsilon=epsilon,
         soft_bound=CARD_NUM / 2
     )
-    return chosen_number, numbers
+    return action
 
 def simulate(simul_num):
     '''
@@ -49,20 +48,20 @@ def simulate(simul_num):
         game_over = False
 
         for round_num in range(1, CARD_NUM + 1):
-            prev_numbers = numbers[first][:]
-            first_number, numbers[first] = choose_number(
+            first_action = choose_number(
                 numbers[first],
                 numbers[second],
                 first == TRAINED
             )
-            odd_flag = first_number % 2 != 0
-            second_number, numbers[second] = choose_number(
+            second_action = choose_number(
                 numbers[second],
-                prev_numbers,
+                numbers[first],
                 second == TRAINED,
                 is_first=False,
-                odd_flag=odd_flag
+                odd_flag=numbers[first][first_action] % 2 != 0
             )
+            first_number = numbers[first].pop(first_action)
+            second_number = numbers[second].pop(second_action)
 
             if first_number > second_number:
                 scores[first] += 1

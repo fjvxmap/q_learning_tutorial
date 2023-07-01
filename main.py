@@ -19,8 +19,7 @@ def choose_number(numbers, oppo_numbers, is_player=False, is_first=True, odd_fla
         odd_flag (bool): Indicates whether number of opponent is odd or not
     Returns:
         Tuple containing the following elements:
-        chosen_number (int): chosen number
-        numbers (list): number list after choosing
+        action (int): index of chosen action
     '''
     if is_player:
         while True:
@@ -31,16 +30,16 @@ def choose_number(numbers, oppo_numbers, is_player=False, is_first=True, odd_fla
                 break
             except ValueError:
                 print("Invalid choice. Please choose a number from the available numbers.")
-        numbers.remove(chosen_number)
+        action = numbers.index(chosen_number)
     else:
-        _, _, chosen_number, numbers, _ = q_choose_number(
+        action, _, _ = q_choose_number(
             numbers,
             oppo_numbers,
             is_first,
             odd_flag,
             soft_bound=CARD_NUM / 2
         )
-    return chosen_number, numbers
+    return action
 
 def play_game():
     '''
@@ -61,21 +60,22 @@ def play_game():
         print(f'[Round {round_num}]')
         print("Computer's available numbers:\t", numbers[COMPUTER])
         print("Player's available numbers:\t", numbers[PLAYER])
-        prev_numbers = numbers[first][:]
-        first_number, numbers[first] = choose_number(
+        first_action = choose_number(
             numbers[first],
             numbers[second],
             first == PLAYER
         )
-        odd_flag = int(first_number % 2 != 0)
+        odd_flag = int(numbers[first][first_action] % 2 != 0)
         print(f'{NAMES[first]} has chosen an {odd_msg[odd_flag]} number.')
-        second_number, numbers[second] = choose_number(
+        second_action = choose_number(
             numbers[second],
-            prev_numbers,
+            numbers[first],
             second == PLAYER,
             is_first=False,
             odd_flag=bool(odd_flag)
         )
+        first_number = numbers[first].pop(first_action)
+        second_number = numbers[second].pop(second_action)
         print(f'Computer has chosen the number {first_number if first == COMPUTER else second_number}.')
 
         if first_number > second_number:

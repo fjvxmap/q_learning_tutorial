@@ -8,7 +8,7 @@ PLAYER_NUM = 2
 NUM_STATES = 2 ** (2 + 2 * CARD_NUM)
 FIRST, SECOND = 0, 1
 TEMPERATURE = 0.5
-ROUND_REWARD, FINAL_REWARD = 1, 1
+ROUND_REWARD, FINAL_REWARD = 1, 5
 
 def initialize_q_table():
     '''
@@ -126,18 +126,13 @@ def get_max_q(numbers, oppo_numbers, is_first=True):
     Returns:
         max_q_val (float): The maximum Q-value
     '''
-    try:
-        if len(numbers) == 1:
-            max_q_val = 0
-        elif is_first:
-            max_q_val = max(q_table[cal_state(numbers, oppo_numbers)])
-        else:
-            max_q_val = max(
-                q_table[cal_state(numbers, oppo_numbers, is_first, True)] +
-                q_table[cal_state(numbers, oppo_numbers, is_first, False)]
-            )
-    except KeyError:
-        max_q_val = 0
+    if is_first:
+        max_q_val = max(q_table[cal_state(numbers, oppo_numbers)])
+    else:
+        max_q_val = max(
+            q_table[cal_state(numbers, oppo_numbers, is_first, True)] +
+            q_table[cal_state(numbers, oppo_numbers, is_first, False)]
+        )
     return max_q_val
 
 def q_choose_number(numbers, oppo_numbers, is_first=True, odd_flag=False, epsilon=0, soft_bound=0):
@@ -154,8 +149,6 @@ def q_choose_number(numbers, oppo_numbers, is_first=True, odd_flag=False, epsilo
         Tuple containing the following elements:
         action (int): index of chosen action
         state (int): present state
-        chosen_number (int): chosen number
-        numbers (list): number list after choosing
         action_q_value (float): Q-value of chosen action
     '''
     # calculate present state
@@ -164,16 +157,12 @@ def q_choose_number(numbers, oppo_numbers, is_first=True, odd_flag=False, epsilo
     # choose action with epsilon-greedy policy
     if np.random.random() < epsilon:
         action = np.random.randint(len(numbers))
-    elif len(numbers) > soft_bound:
+    elif soft_bound > 0 and len(numbers) > soft_bound:
         action = select_action(softmax(q_table[state], TEMPERATURE))
     else:
         action = q_table[state].index(max(q_table[state]))
     action_q_value = q_table[state][action]
-
-    # remove chosen number from the list
-    chosen_number = numbers[action]
-    numbers.remove(chosen_number)
-    return action, state, chosen_number, numbers, action_q_value
+    return action, state, action_q_value
 
 def q_learning(epochs, l_rate=0.1, d_factor=0.9, epsilon=0.1):
     '''
@@ -195,26 +184,36 @@ def q_learning(epochs, l_rate=0.1, d_factor=0.9, epsilon=0.1):
         states = [[] for _ in range(PLAYER_NUM)]
         game_over = False
 
-        for _ in range(CARD_NUM - 1):
-            prev_first_numbers = numbers[first][:]
-            first_action, first_state, first_number, numbers[first], first_q = q_choose_number(
+        for round_num in range(CARD_NUM):
+            first_action, first_state, first_q = q_choose_number(
                 numbers[first],
                 numbers[second],
                 is_first=True,
                 odd_flag=False,
                 epsilon=r_epsilon
             )
-            is_odd = 1 if first_number % 2 != 0 else 0
-            second_action, second_state, second_number, numbers[second], second_q = q_choose_number(
+            second_action, second_state, second_q = q_choose_number(
                 numbers[second],
-                prev_first_numbers,
+                numbers[first],
                 is_first=False,
-                odd_flag=is_odd,
+                odd_flag=numbers[first][first_action] % 2 != 0,
                 epsilon=r_epsilon
             )
+            first_number = numbers[first].pop(first_action)
+            second_number = numbers[second].pop(second_action)
 
-            first_next_max_q = get_max_q(numbers[first], numbers[second], is_first=False)
-            second_next_max_q = get_max_q(numbers[second], numbers[first])
+            for i in range(PLAYER_NUM):
+                if numbers[i][0] >= numbers[1 - i][-1]:
+                    scores[i] += CARD_NUM - round_num - 1
+                    if numbers[i][0] == numbers[1 - i][-1]:
+                        scores[i] -= 1
+                    first_next_max_q, second_next_max_q = 0, 0
+                    game_over = True
+                    break
+
+            if not game_over:
+                first_next_max_q = get_max_q(numbers[first], numbers[second], is_first=False)
+                second_next_max_q = get_max_q(numbers[second], numbers[first])
 
             states[first].append((
                 first_state, first_action, l_rate * (d_factor * first_next_max_q - first_q)
@@ -230,18 +229,9 @@ def q_learning(epochs, l_rate=0.1, d_factor=0.9, epsilon=0.1):
                 rewards[first], rewards[second] = -ROUND_REWARD, ROUND_REWARD
                 scores[second] += 1
 
-            q_table[first_state][first_action] += l_rate * (
-                rewards[first] + d_factor * first_next_max_q - first_q
-            )
-            q_table[second_state][second_action] += l_rate * (
-                rewards[second] + d_factor * second_next_max_q - second_q
-            )
+            q_table[first_state][first_action] += l_rate * rewards[first] + states[first][-1][2]
+            q_table[second_state][second_action] += l_rate * rewards[second] + states[second][-1][2]
 
-            for i in range(PLAYER_NUM):
-                if min(numbers[i]) >= max(numbers[1 - i]):
-                    scores[i] += len(numbers[i]) - int(min(numbers[i]) == max(numbers[1 - i]))
-                    game_over = True
-                    break
             if game_over:
                 break
             first, second = second, first
