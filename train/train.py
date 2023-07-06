@@ -8,7 +8,7 @@ PLAYER_NUM = 2
 NUM_STATES = 2 ** (2 + 2 * CARD_NUM)
 FIRST, SECOND = 0, 1
 TEMPERATURE = 0.5
-ROUND_REWARD, FINAL_REWARD = 1, 5
+ROUND_REWARD, FINAL_REWARD = 1, 3
 
 def initialize_q_table():
     '''
@@ -32,7 +32,7 @@ def initialize_q_table():
             second_pos = [2 - second_bin.find('1'), CARD_NUM - second_bin[::-1].find('1') - 1]
             if -1 in first_pos + second_pos or first_bin.count('1') != second_bin.count('1'):
                 continue
-            if first_pos[0] >= second_pos[1] or first_pos[1] <= second_pos[0]:
+            if first_pos[0] > second_pos[1] or first_pos[1] < second_pos[0]:
                 continue
             q_table[state] = [0] * second_bin.count('1')
 
@@ -71,30 +71,20 @@ def write_q_table(path):
                 q_table_file.write(f'{q_value} ')
             q_table_file.write('\n')
 
-def softmax(q_values, temperature):
+def select_action(q_values, temperature):
     '''
-    Return softmax probability list with given Q-values.
+    Select action with given temperature.
     Args:
         q_values (list): List of Q values
         temperature (float): Temperature value of softmax algorithm
     Returns:
-        probabilities (list): Probability values
+        selected_action (int): index of chosen action
     '''
     exp_values = [np.exp(q_value / temperature) for q_value in q_values]
     probabilities = exp_values / np.sum(exp_values)
-    return probabilities
-
-def select_action(action_probabilities):
-    '''
-    Select action with given probability list.
-    Args:
-        action_probabilities (list): Probability values of each action
-    Returns:
-        selected_action (int): index of chosen action
-    '''
-    num_actions = len(action_probabilities)
+    num_actions = len(q_values)
     action_indices = np.arange(num_actions)
-    selected_action = np.random.choice(action_indices, p=action_probabilities)
+    selected_action = np.random.choice(action_indices, p=probabilities)
     return selected_action
 
 def cal_state(numbers, oppo_numbers, is_first=True, odd_flag=False):
@@ -158,7 +148,7 @@ def q_choose_number(numbers, oppo_numbers, is_first=True, odd_flag=False, epsilo
     if np.random.random() < epsilon:
         action = np.random.randint(len(numbers))
     elif soft_bound > 0 and len(numbers) > soft_bound:
-        action = select_action(softmax(q_table[state], TEMPERATURE))
+        action = select_action(q_table[state], TEMPERATURE)
     else:
         action = q_table[state].index(max(q_table[state]))
     action_q_value = q_table[state][action]
@@ -177,14 +167,15 @@ def q_learning(epochs, l_rate=0.1, d_factor=0.9, epsilon=0.1):
     '''
     for episode in tqdm(range(epochs), mininterval=10):
         r_epsilon = epsilon / (1 + (episode / epochs))
-        scores, rewards = [0] * PLAYER_NUM, [0] * PLAYER_NUM
+        score, r_card_num = 0, CARD_NUM
         numbers = [list(range(1, CARD_NUM + 1)), list(range(1, CARD_NUM + 1))]
-        first = int(np.random.randint(PLAYER_NUM))
-        second = 1 - first
+        round_winner = int(np.random.randint(PLAYER_NUM))
         states = [[] for _ in range(PLAYER_NUM)]
         game_over = False
 
-        for round_num in range(CARD_NUM):
+        while not game_over:
+            first, second = round_winner, 1 - round_winner
+            r_card_num -= 1
             first_action, first_state, first_q = q_choose_number(
                 numbers[first],
                 numbers[second],
@@ -202,48 +193,41 @@ def q_learning(epochs, l_rate=0.1, d_factor=0.9, epsilon=0.1):
             first_number = numbers[first].pop(first_action)
             second_number = numbers[second].pop(second_action)
 
-            for i in range(PLAYER_NUM):
-                if numbers[i][0] >= numbers[1 - i][-1]:
-                    scores[i] += CARD_NUM - round_num - 1
-                    if numbers[i][0] == numbers[1 - i][-1]:
-                        scores[i] -= 1
-                    first_next_max_q, second_next_max_q = 0, 0
-                    game_over = True
-                    break
-
-            if not game_over:
+            first_next_max_q, second_next_max_q = 0, 0
+            game_over = True
+            if r_card_num == 1 and numbers[first] == numbers[second]:
+                score += 0
+            elif numbers[first][0] > numbers[second][-1]:
+                score += (2 * first - 1) * (r_card_num)
+            elif numbers[second][0] > numbers[first][-1]:
+                score += (2 * second - 1) * (r_card_num)
+            else:
+                game_over = False
                 first_next_max_q = get_max_q(numbers[first], numbers[second], is_first=False)
                 second_next_max_q = get_max_q(numbers[second], numbers[first])
 
-            states[first].append((
-                first_state, first_action, l_rate * (d_factor * first_next_max_q - first_q)
-            ))
-            states[second].append((
-                second_state, second_action, l_rate * (d_factor * second_next_max_q - second_q)
-            ))
+            first_learn = d_factor * first_next_max_q - first_q
+            second_learn = d_factor * second_next_max_q - second_q
+            states[first].append((first_state, first_action, first_learn))
+            states[second].append((second_state, second_action, second_learn))
 
             if first_number > second_number:
-                rewards[first], rewards[second] = ROUND_REWARD, -ROUND_REWARD
-                scores[first] += 1
+                q_table[first_state][first_action] += l_rate * (ROUND_REWARD + first_learn)
+                q_table[second_state][second_action] += l_rate * (-ROUND_REWARD + second_learn)
+                score -= 1
+                round_winner = first
             elif first_number < second_number:
-                rewards[first], rewards[second] = -ROUND_REWARD, ROUND_REWARD
-                scores[second] += 1
+                q_table[first_state][first_action] += l_rate * (-ROUND_REWARD + first_learn)
+                q_table[second_state][second_action] += l_rate * (ROUND_REWARD + second_learn)
+                score += 1
+                round_winner = second
 
-            q_table[first_state][first_action] += l_rate * rewards[first] + states[first][-1][2]
-            q_table[second_state][second_action] += l_rate * rewards[second] + states[second][-1][2]
-
-            if game_over:
-                break
-            first, second = second, first
-
-        scores[FIRST] += int(numbers[FIRST] > numbers[SECOND])
-        scores[SECOND] += int(numbers[FIRST] < numbers[SECOND])
-        if scores[FIRST] != scores[SECOND]:
-            winner = FIRST if scores[FIRST] > scores[SECOND] else SECOND
-            for coordinate in states[winner]:
-                q_table[coordinate[0]][coordinate[1]] += l_rate * FINAL_REWARD + coordinate[2]
-            for coordinate in states[1 - winner]:
-                q_table[coordinate[0]][coordinate[1]] += -l_rate * FINAL_REWARD + coordinate[2]
+        if score != 0:
+            winner = int(score > 0)
+            for coord in states[winner]:
+                q_table[coord[0]][coord[1]] += l_rate * (FINAL_REWARD + coord[2])
+            for coord in states[1 - winner]:
+                q_table[coord[0]][coord[1]] += l_rate * (-FINAL_REWARD + coord[2])
 
 q_table = {}
 

@@ -51,13 +51,15 @@ def play_game():
     '''
     scores = [0] * PLAYER_NUM
     numbers = [list(range(1, CARD_NUM + 1)), list(range(1, CARD_NUM + 1))]
-    first = int(np.random.randint(PLAYER_NUM))
-    second = 1 - first
+    round_winner = int(np.random.randint(PLAYER_NUM))
     odd_msg = ['even', 'odd']
+    r_card_num = CARD_NUM
     game_over = False
 
-    for round_num in range(1, CARD_NUM + 1):
-        print(f'[Round {round_num}]')
+    while not game_over:
+        first, second = round_winner, 1 - round_winner
+        r_card_num -= 1
+        print(f'[Round {CARD_NUM - r_card_num}]')
         print("Computer's available numbers:\t", numbers[COMPUTER])
         print("Player's available numbers:\t", numbers[PLAYER])
         first_action = choose_number(
@@ -78,24 +80,27 @@ def play_game():
         second_number = numbers[second].pop(second_action)
         print(f'Computer has chosen the number {first_number if first == COMPUTER else second_number}.')
 
+        game_over = True
+        if r_card_num == 1 and numbers[first] == numbers[second]:
+            scores[first] += 0
+        elif numbers[first][0] > numbers[second][-1]:
+            scores[first] += r_card_num
+        elif numbers[second][0] > numbers[first][-1]:
+            scores[second] += r_card_num
+        else:
+            game_over = False
+
         if first_number > second_number:
             print(f'{NAMES[first]} won!')
             scores[first] += 1
+            round_winner = first
         elif first_number < second_number:
             print(f'{NAMES[second]} won!')
             scores[second] += 1
+            round_winner = second
         else:
             print("It's a tie!")
         print()
-
-        for i in range(PLAYER_NUM):
-            if min(numbers[i]) >= max(numbers[1 - i]):
-                scores[i] += CARD_NUM - round_num - int(min(numbers[i]) == max(numbers[1 - i]))
-                game_over = True
-                break
-        if game_over:
-            break
-        first, second = second, first
 
     print("Game over!")
     print("Player's score:", scores[PLAYER])

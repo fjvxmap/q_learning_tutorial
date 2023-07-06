@@ -41,13 +41,14 @@ def simulate(simul_num):
     '''
     wins = [0] * PLAYER_NUM
     for _ in tqdm(range(simul_num), mininterval=1):
-        scores = [0] * PLAYER_NUM
+        score, r_card_num = 0, CARD_NUM
         numbers = [list(range(1, CARD_NUM + 1)), list(range(1, CARD_NUM + 1))]
-        first = int(np.random.randint(PLAYER_NUM))
-        second = 1 - first
+        round_winner = int(np.random.randint(PLAYER_NUM))
         game_over = False
 
-        for round_num in range(1, CARD_NUM + 1):
+        while not game_over:
+            first, second = round_winner, 1 - round_winner
+            r_card_num -= 1
             first_action = choose_number(
                 numbers[first],
                 numbers[second],
@@ -63,24 +64,28 @@ def simulate(simul_num):
             first_number = numbers[first].pop(first_action)
             second_number = numbers[second].pop(second_action)
 
-            if first_number > second_number:
-                scores[first] += 1
-            elif first_number < second_number:
-                scores[second] += 1
+            game_over = True
+            if r_card_num == 1 and numbers[first] == numbers[second]:
+                score += 0
+            elif numbers[first][0] > numbers[second][-1]:
+                score += (2 * first - 1) * (r_card_num)
+            elif numbers[second][0] > numbers[first][-1]:
+                score += (2 * second - 1) * (r_card_num)
+            else:
+                game_over = False
 
-            for i in range(PLAYER_NUM):
-                if min(numbers[i]) >= max(numbers[1 - i]):
-                    scores[i] += CARD_NUM - round_num - int(min(numbers[i]) == max(numbers[1 - i]))
-                    game_over = True
-                    break
+            if first_number > second_number:
+                score -= 1
+                round_winner = first
+            elif first_number < second_number:
+                score += 1
+                round_winner = second
+
             if game_over:
                 break
-            first, second = second, first
 
-        if scores[DEFAULT] > scores[TRAINED]:
-            wins[DEFAULT] += 1
-        elif scores[DEFAULT] < scores[TRAINED]:
-            wins[TRAINED] += 1
+        if score != 0:
+            wins[int(score > 0)] += 1
 
     if simul_num > 0:
         print('[Simulation result]')
